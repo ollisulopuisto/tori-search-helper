@@ -1,175 +1,192 @@
-import React, { useState, useEffect } from 'react';
-import {
-  Search,
-  ExternalLink,
-  Info,
-  CheckCircle2,
-  Filter,
-  X,
-  Share2,
-  ShieldAlert,
-} from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Search, Save, Trash2, X, ExternalLink, SlidersHorizontal, Settings, AlertTriangle } from 'lucide-react';
 import { getAvailablePresets, getPresetById } from './data/presetLoader';
 import ItemCard from './components/ItemCard';
 import PresetSwitcher from './components/PresetSwitcher';
+import PresetManager from './components/PresetManager'; // Import PresetManager
 
 export default function App() {
-  const [availablePresets] = useState(getAvailablePresets());
-  // Default to first preset if no saved preference
-  const [activePresetId, setActivePresetId] = useState(() => {
-    return localStorage.getItem('toriwrt_active_preset') || availablePresets[0]?.id;
+  const [candidates, setCandidates] = useState(() => {
+    const saved = localStorage.getItem('tori_scout_candidates');
+    return saved ? JSON.parse(saved) : [];
   });
 
-  const activePreset = getAvailablePresets().find(p => p.id === activePresetId) || availablePresets[0];
+  const [availablePresets, setAvailablePresets] = useState(getAvailablePresets());
+  const [activePresetId, setActivePresetId] = useState(() => {
+    return localStorage.getItem('tori_scout_active_preset') || availablePresets[0]?.id;
+  });
 
-  const [candidates, setCandidates] = useState([]);
-  const [filter, setFilter] = useState('All');
+  const [isManagerOpen, setIsManagerOpen] = useState(false); // State for manager modal
+
   const [customSearch, setCustomSearch] = useState('');
+  const [activeCategory, setActiveCategory] = useState('All'); // Renamed from 'filter'
 
-  // Save/Load candidates
-  useEffect(() => {
-    const saved = localStorage.getItem('toriwrt_candidates');
-    if (saved) setCandidates(JSON.parse(saved));
-  }, []);
+  // Load the active preset object
+  const activePreset = availablePresets.find(p => p.id === activePresetId) || availablePresets[0];
+
+  // Refresh presets (passed to Manager)
+  const refreshPresets = () => {
+    setAvailablePresets(getAvailablePresets());
+  };
+
+  // Switch preset handler
+  const handlePresetSwitch = (newId) => {
+    setActivePresetId(newId);
+    setActiveCategory('All'); // Reset filter when switching
+    // Verify if the new preset exists (it might have been deleted)
+    // If not, it will default to first available in next render
+  };
 
   useEffect(() => {
-    localStorage.setItem('toriwrt_candidates', JSON.stringify(candidates));
+    localStorage.setItem('tori_scout_candidates', JSON.stringify(candidates));
   }, [candidates]);
 
-  // Save active preset preference
   useEffect(() => {
-    localStorage.setItem('toriwrt_active_preset', activePresetId);
+    if (activePresetId) {
+      localStorage.setItem('tori_scout_active_preset', activePresetId);
+    }
   }, [activePresetId]);
 
-  // Reset filter when preset changes
+  // Ensure activePresetId is valid
   useEffect(() => {
-    setFilter('All');
-  }, [activePresetId]);
+    if (!availablePresets.find(p => p.id === activePresetId)) {
+      if (availablePresets.length > 0) {
+        setActivePresetId(availablePresets[0].id);
+      }
+    }
+  }, [availablePresets, activePresetId]);
+
 
   const handleTrack = (item) => {
-    const newCandidate = {
+    // Check if item is already tracked to prevent duplicates
+    if (candidates.some(c => c.uniqueId === `${activePreset.id} -${item.id} `)) return;
+
+    const newItem = {
       ...item,
-      uniqueId: Date.now(),
-      link: '',
-      price: '',
-      foundDate: new Date().toLocaleDateString()
+      uniqueId: `${activePreset.id} -${item.id} `, // Unique ID for tracking
+      presetId: activePreset.id,
+      presetName: activePreset.name,
+      addedAt: new Date().toISOString()
     };
-    setCandidates([...candidates, newCandidate]);
+    setCandidates([...candidates, newItem]);
   };
 
   const handleDelete = (uniqueId) => {
     setCandidates(candidates.filter(c => c.uniqueId !== uniqueId));
   };
 
-  const handleUpdate = (uniqueId, field, value) => {
-    setCandidates(candidates.map(c =>
-      c.uniqueId === uniqueId ? { ...c, [field]: value } : c
-    ));
+  // Helper for filters (using preset-specific logic if available)
+  const filterItem = (item) => {
+    if (activeCategory === 'All') return true;
+
+    // Custom preset filters
+    if (activePreset.categoryFilters?.[activeCategory]) {
+      // If the preset has custom filter logic for this category
+      const filterFn = activePreset.categoryFilters[activeCategory];
+      // Since we can't easily serialize functions in JSON presets,
+      // for now we rely on simple category string matching unless hardcoded in file presets.
+      // If it's a file preset with functions, it works.
+      // If it's a JSON preset, it won't have functions.
+      if (typeof filterFn === 'function') {
+        return filterFn(item);
+      }
+    }
+    // Default strict equality check
+    return item.category === activeCategory;
   };
 
-  const performCustomSearch = (e) => {
+  const filteredItems = useMemo(() => {
+    return (activePreset.items || []).filter(filterItem);
+  }, [activePreset, activeCategory]);
+
+  // Calculate total cost (simple regex parsing)
+  const totalCost = candidates.reduce((sum, item) => {
+    const priceMatch = item.fields?.approxPrice?.match(/(\d+)/);
+    return sum + (priceMatch ? parseInt(priceMatch[0]) : 0);
+  }, 0);
+
+  const launchCustomSearch = (e) => {
     e.preventDefault();
     if (!customSearch.trim()) return;
-    const url = `${activePreset.searchBaseUrl}${encodeURIComponent(customSearch)}`;
+    const url = `${activePreset.searchBaseUrl}${encodeURIComponent(customSearch)} `;
     window.open(url, '_blank');
   };
-
-  // Filter items based on active preset's logic
-  const filteredItems = activePreset.items.filter(item => {
-    if (filter === 'All') return true;
-
-    // If preset has custom filter logic (like routers.js), use it
-    if (activePreset.categoryFilters?.[filter]) {
-      return activePreset.categoryFilters[filter](item.category);
-    }
-
-    // Default strict equality check
-    return item.category === filter;
-  });
-
-  const totalPrice = candidates.reduce((sum, c) => sum + (Number(c.price) || 0), 0);
 
   return (
     <div className="min-h-screen bg-gray-50 text-gray-800 font-sans">
       {/* Header */}
-      <header className="bg-indigo-700 text-white shadow-lg sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 py-4">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              {/* Dynamic Icon from Preset would go here if we mapped string names to components, 
-                  for now using simple logic or just the title */}
+      <header className="bg-gradient-to-r from-indigo-900 via-indigo-800 to-indigo-900 text-white shadow-lg sticky top-0 z-40">
+        <div className="container mx-auto px-4 py-4">
+          <div className="flex flex-col md:flex-row justify-between items-center gap-4">
+            <div className="flex items-center gap-4">
               <div>
                 <h1 className="text-2xl font-bold tracking-tight">Tori Scout</h1>
                 <p className="text-indigo-200 text-xs">
                   {activePreset.name} · {activePreset.description}
                 </p>
               </div>
-            </div>
 
-            <div className="flex items-center gap-4">
-              <PresetSwitcher
-                presets={availablePresets}
-                activePresetId={activePresetId}
-                onSwitch={setActivePresetId}
-              />
-
-              <div className="bg-indigo-800 rounded-lg p-1 flex items-center">
-                <form onSubmit={performCustomSearch} className="flex">
-                  <input
-                    type="text"
-                    placeholder="Custom Search..."
-                    className="bg-transparent border-none text-white placeholder-indigo-300 focus:ring-0 text-sm w-48"
-                    value={customSearch}
-                    onChange={(e) => setCustomSearch(e.target.value)}
-                  />
-                  <button type="submit" className="p-2 text-indigo-200 hover:text-white">
-                    <Search className="w-4 h-4" />
-                  </button>
-                </form>
+              <div className="flex items-center gap-2 ml-4">
+                <PresetSwitcher
+                  presets={availablePresets}
+                  activePresetId={activePresetId}
+                  onSwitch={handlePresetSwitch}
+                />
+                <button
+                  onClick={() => setIsManagerOpen(true)}
+                  className="p-2 bg-indigo-700 hover:bg-indigo-600 rounded-lg text-indigo-100 transition-colors"
+                  title="Manage Presets"
+                >
+                  <Settings className="w-5 h-5" />
+                </button>
               </div>
             </div>
+
+            {/* Custom Search Bar */}
+            <form onSubmit={launchCustomSearch} className="flex w-full md:w-auto relative group">
+              <input
+                type="text"
+                placeholder={`Search ${activePreset.name}...`}
+                className="w-full md:w-80 px-4 py-2 rounded-l-lg text-gray-900 border-0 focus:ring-2 focus:ring-indigo-400 outline-none"
+                value={customSearch}
+                onChange={(e) => setCustomSearch(e.target.value)}
+              />
+              <button
+                type="submit"
+                className="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-r-lg font-medium transition-colors flex items-center"
+              >
+                <Search className="w-4 h-4 mr-2" />
+                Search
+              </button>
+            </form>
           </div>
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 py-8 grid grid-cols-1 lg:grid-cols-12 gap-8">
+      {/* Main Content */}
+      <main className="container mx-auto px-4 py-8 grid grid-cols-1 lg:grid-cols-12 gap-8">
 
-        {/* Left Column: Database & filters */}
+        {/* Left Column: Filters & Grid */}
         <div className="lg:col-span-8 space-y-6">
 
-          {/* Warning Banner (if preset has one) */}
-          {activePreset.warningBanner && (
-            <div className="bg-amber-50 border-l-4 border-amber-500 p-4 rounded-r-lg flex items-start">
-              <ShieldAlert className="w-6 h-6 text-amber-600 mr-3 shrink-0" />
-              <div>
-                <h4 className="font-bold text-amber-800 text-sm">{activePreset.warningBanner.title}</h4>
-                <ul className="text-xs text-amber-800 list-disc pl-4 mt-1 space-y-1">
-                  {activePreset.warningBanner.rules.map((rule, idx) => (
-                    <li key={idx}>{rule}</li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-          )}
 
           {/* Filters */}
-          <div className="flex flex-wrap gap-2 items-center pb-4 border-b border-gray-200">
-            <Filter className="w-4 h-4 text-gray-500 mr-2" />
-            {activePreset.categories.map(cat => (
+          <div className="flex flex-wrap gap-2">
+            {(activePreset.categories || ['All']).map(cat => (
               <button
                 key={cat}
-                onClick={() => setFilter(cat)}
-                className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all ${filter === cat
-                    ? 'bg-indigo-600 text-white shadow-md'
-                    : 'bg-white text-gray-600 hover:bg-gray-100 border border-gray-200'
-                  }`}
+                onClick={() => setActiveCategory(cat)}
+                className={`px - 4 py - 2 rounded - full text - sm font - medium transition - all ${activeCategory === cat
+                  ? 'bg-indigo-600 text-white shadow-md transform scale-105'
+                  : 'bg-white text-gray-600 hover:bg-gray-100 border border-gray-200'
+                  } `}
               >
                 {cat}
               </button>
             ))}
           </div>
 
-          {/* Grid */}
+          {/* New Item Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {filteredItems.map(item => (
               <ItemCard
@@ -179,17 +196,22 @@ export default function App() {
                 onTrack={handleTrack}
               />
             ))}
+
+            {filteredItems.length === 0 && (
+              <div className="col-span-full text-center py-12 text-gray-400 bg-white rounded-xl border border-dashed border-gray-300">
+                <p>No items found in this category.</p>
+              </div>
+            )}
           </div>
         </div>
 
         {/* Right Column: Candidates & Info */}
         <div className="lg:col-span-4 space-y-6">
-
           {/* Candidates Box */}
-          <div className={`bg-white rounded-xl shadow-sm border border-indigo-100 overflow-hidden sticky top-24`}>
+          <div className="bg-white rounded-xl shadow-sm border border-indigo-100 overflow-hidden sticky top-24">
             <div className="bg-indigo-50 px-4 py-3 border-b border-indigo-100 flex justify-between items-center">
               <h2 className="font-semibold text-indigo-900 flex items-center">
-                <CheckCircle2 className="w-4 h-4 mr-2" />
+                <Save className="w-4 h-4 mr-2" />
                 Procurement List
               </h2>
               <span className="bg-white text-indigo-600 px-2 py-0.5 rounded text-xs font-bold">
@@ -205,74 +227,95 @@ export default function App() {
                   <p className="text-xs mt-1">Search models and click the save icon.</p>
                 </div>
               ) : (
-                candidates.map(candidate => (
-                  <div key={candidate.uniqueId} className="bg-gray-50 rounded-lg p-3 relative group border border-gray-100">
-                    <button
-                      onClick={() => handleDelete(candidate.uniqueId)}
-                      className="absolute top-2 right-2 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                    <div className="font-medium text-sm text-gray-900 pr-6">{candidate.name}</div>
-
-                    <div className="mt-2 space-y-2">
-                      <input
-                        type="text"
-                        placeholder="Paste URL..."
-                        className="w-full text-xs border-gray-200 rounded bg-white px-2 py-1 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-                        value={candidate.link}
-                        onChange={(e) => handleUpdate(candidate.uniqueId, 'link', e.target.value)}
-                      />
-                      <div className="flex items-center gap-2">
-                        <div className="relative flex-1">
-                          <span className="absolute left-2 top-1 text-gray-400 text-xs">€</span>
-                          <input
-                            type="number"
-                            placeholder="Price"
-                            className="w-full pl-5 text-xs border-gray-200 rounded bg-white px-2 py-1 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500"
-                            value={candidate.price}
-                            onChange={(e) => handleUpdate(candidate.uniqueId, 'price', e.target.value)}
-                          />
+                <div className="space-y-3">
+                  {candidates.map((candidate) => (
+                    <div key={candidate.uniqueId} className="bg-gray-50 p-3 rounded-lg border border-gray-100 group relative">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <div className="text-xs text-indigo-600 font-semibold mb-0.5">
+                            {candidate.presetName}
+                          </div>
+                          <h3 className="font-medium text-sm text-gray-900">{candidate.name}</h3>
+                          {candidate.fields?.approxPrice && (
+                            <div className="text-xs text-gray-500 mt-1">
+                              Est: {candidate.fields.approxPrice}
+                            </div>
+                          )}
                         </div>
-                        {candidate.link && (
-                          <a href={candidate.link} target="_blank" className="bg-blue-100 text-blue-600 p-1 rounded hover:bg-blue-200">
-                            <ExternalLink className="w-4 h-4" />
-                          </a>
-                        )}
+                        <button
+                          onClick={() => handleDelete(candidate.uniqueId)}
+                          className="text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                          title="Remove"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+
+                      <div className="mt-2 flex gap-2">
+                        <a
+                          href={`${getPresetById(candidate.presetId)?.searchBaseUrl || 'https://tori.fi?q='}${encodeURIComponent(candidate.searchTerms?.[0]?.query || candidate.name)} `}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex-1 bg-white hover:bg-gray-50 text-indigo-600 text-xs py-1.5 px-2 rounded border border-indigo-100 flex items-center justify-center transition-colors"
+                        >
+                          <ExternalLink className="w-3 h-3 mr-1" />
+                          Check Tori.fi
+                        </a>
                       </div>
                     </div>
+                  ))}
+
+                  <div className="pt-3 border-t border-gray-100 flex justify-between items-center">
+                    <span className="text-sm font-medium text-gray-600">Total Est. Cost:</span>
+                    <span className="text-lg font-bold text-indigo-900">~{totalCost}€</span>
                   </div>
-                ))
+                </div>
               )}
             </div>
-
-            {candidates.length > 0 && (
-              <div className="bg-gray-50 p-4 border-t border-gray-200">
-                <div className="flex justify-between items-center text-sm font-medium">
-                  <span>Total Estimated Cost:</span>
-                  <span className="text-lg text-indigo-700 font-bold">{totalPrice} €</span>
-                </div>
-              </div>
-            )}
           </div>
 
-          {/* Quick Tips Box (if preset has tips) */}
-          {activePreset.tips && (
-            <div className="bg-blue-50 rounded-xl p-5 border border-blue-100 text-sm text-blue-900 space-y-3">
-              <h3 className="font-bold flex items-center">
-                <Info className="w-4 h-4 mr-2" />
-                {activePreset.tips.title}
+          {/* Warning Banner (Dynamic) */}
+          {activePreset.warningBanner && (
+            <div className="bg-amber-50 rounded-xl p-5 border border-amber-100 text-sm text-amber-900 space-y-3">
+              <h3 className="font-bold flex items-center text-amber-700">
+                <AlertTriangle className="w-4 h-4 mr-2" />
+                {activePreset.warningBanner.title}
               </h3>
-              <ul className="space-y-2 list-disc pl-4 text-blue-800/80">
-                {activePreset.tips.items.map((tip, idx) => (
-                  <li key={idx}>{tip}</li>
+              <ul className="space-y-2 list-disc pl-4 text-amber-800/80">
+                {activePreset.warningBanner.rules.map((rule, i) => (
+                  <li key={i}>{rule}</li>
                 ))}
               </ul>
             </div>
           )}
 
+          {/* Tips (Dynamic) */}
+          {activePreset.tips && (
+            <div className="bg-blue-50 rounded-xl p-5 border border-blue-100 text-sm text-blue-900 space-y-3">
+              <h3 className="font-bold flex items-center">
+                <Settings className="w-4 h-4 mr-2" />
+                {activePreset.tips.title}
+              </h3>
+              <ul className="space-y-2 list-disc pl-4 text-blue-800/80">
+                {activePreset.tips.items.map((tip, i) => (
+                  <li key={i}>{tip}</li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
       </main>
+
+      {/* Preset Manager Modal */}
+      {isManagerOpen && (
+        <PresetManager
+          presets={availablePresets}
+          onClose={() => setIsManagerOpen(false)}
+          onRefresh={refreshPresets}
+          activePresetId={activePresetId}
+          onSwitchPreset={handlePresetSwitch}
+        />
+      )}
     </div>
   );
 }
