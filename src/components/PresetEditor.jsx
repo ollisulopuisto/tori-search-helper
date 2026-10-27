@@ -23,7 +23,7 @@ const DEFAULT_ITEM = {
 };
 
 export default function PresetEditor({ initialPreset, onSave, onCancel }) {
-    const [preset, setPreset] = useState(initialPreset || { ...DEFAULT_PRESET, id: `custom-${Date.now()}` });
+    const [preset, setPreset] = useState(() => initialPreset || { ...DEFAULT_PRESET, id: `custom-${Date.now()}` });
     const [activeTab, setActiveTab] = useState('settings');
     const [errors, setErrors] = useState([]);
     const [expandedItems, setExpandedItems] = useState({});

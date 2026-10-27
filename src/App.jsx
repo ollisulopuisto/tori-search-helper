@@ -21,8 +21,13 @@ export default function App() {
   const [customSearch, setCustomSearch] = useState('');
   const [activeCategory, setActiveCategory] = useState('All'); // Renamed from 'filter'
 
+  // Ensure activePresetId is valid
+  const effectiveActivePresetId = availablePresets.find(p => p.id === activePresetId)
+    ? activePresetId
+    : availablePresets[0]?.id;
+
   // Load the active preset object
-  const activePreset = availablePresets.find(p => p.id === activePresetId) || availablePresets[0];
+  const activePreset = availablePresets.find(p => p.id === effectiveActivePresetId) || availablePresets[0];
 
   // Refresh presets (passed to Manager)
   const refreshPresets = () => {
@@ -33,8 +38,6 @@ export default function App() {
   const handlePresetSwitch = (newId) => {
     setActivePresetId(newId);
     setActiveCategory('All'); // Reset filter when switching
-    // Verify if the new preset exists (it might have been deleted)
-    // If not, it will default to first available in next render
   };
 
   useEffect(() => {
@@ -42,19 +45,10 @@ export default function App() {
   }, [candidates]);
 
   useEffect(() => {
-    if (activePresetId) {
-      localStorage.setItem('tori_scout_active_preset', activePresetId);
+    if (effectiveActivePresetId) {
+      localStorage.setItem('tori_scout_active_preset', effectiveActivePresetId);
     }
-  }, [activePresetId]);
-
-  // Ensure activePresetId is valid
-  useEffect(() => {
-    if (!availablePresets.find(p => p.id === activePresetId)) {
-      if (availablePresets.length > 0) {
-        setActivePresetId(availablePresets[0].id);
-      }
-    }
-  }, [availablePresets, activePresetId]);
+  }, [effectiveActivePresetId]);
 
 
   const handleTrack = (item) => {
@@ -75,28 +69,18 @@ export default function App() {
     setCandidates(candidates.filter(c => c.uniqueId !== uniqueId));
   };
 
-  // Helper for filters (using preset-specific logic if available)
-  const filterItem = (item) => {
-    if (activeCategory === 'All') return true;
-
-    // Custom preset filters
-    if (activePreset.categoryFilters?.[activeCategory]) {
-      // If the preset has custom filter logic for this category
-      const filterFn = activePreset.categoryFilters[activeCategory];
-      // Since we can't easily serialize functions in JSON presets,
-      // for now we rely on simple category string matching unless hardcoded in file presets.
-      // If it's a file preset with functions, it works.
-      // If it's a JSON preset, it won't have functions.
-      if (typeof filterFn === 'function') {
-        return filterFn(item);
-      }
-    }
-    // Default strict equality check
-    return item.category === activeCategory;
-  };
-
   const filteredItems = useMemo(() => {
-    return (activePreset.items || []).filter(filterItem);
+    if (activeCategory === 'All') return activePreset.items || [];
+
+    return (activePreset.items || []).filter(item => {
+      if (activePreset.categoryFilters?.[activeCategory]) {
+        const filterFn = activePreset.categoryFilters[activeCategory];
+        if (typeof filterFn === 'function') {
+          return filterFn(item);
+        }
+      }
+      return item.category === activeCategory;
+    });
   }, [activePreset, activeCategory]);
 
   // Calculate total cost (simple regex parsing)

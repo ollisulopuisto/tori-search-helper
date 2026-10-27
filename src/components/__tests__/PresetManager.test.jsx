@@ -58,18 +58,6 @@ describe('PresetManager', () => {
         const onClose = vi.fn();
         render(<PresetManager presets={mockPresets} onClose={onClose} />);
 
-        // Close button is the X icon, usually strictly inside a button
-        // But helper text "Manage Search Presets" has a close button next to it
-        const closeBtn = screen.getByRole('button', { name: '' }); // X icon button often has no text
-        // Actually, looking at code: <button onClick={onClose}><X /></button>
-        // Let's find by class or just first button?
-        // Better: Render with specific close button test id or assume it's the one in header.
-
-        // Let's try finding by role button and iterating or use aria-label if I added one.
-        // I didn't add aria-label.
-        // Let's rely on lucide-react X icon usually rendering an SVG.
-        // Let's just use container query.
-
         fireEvent.click(screen.getAllByRole('button')[0]); // The X button is likely the first one
         expect(onClose).toHaveBeenCalled();
     });

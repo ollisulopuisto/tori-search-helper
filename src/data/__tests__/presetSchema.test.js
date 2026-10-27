@@ -30,7 +30,9 @@ describe('validatePreset', () => {
     });
 
     it('rejects a preset missing required top-level fields', () => {
-        const { id, name, ...incomplete } = validPreset;
+        const incomplete = { ...validPreset };
+        delete incomplete.id;
+        delete incomplete.name;
         const result = validatePreset(incomplete);
         expect(result.valid).toBe(false);
         expect(result.errors).toContain('Missing required field: id');
