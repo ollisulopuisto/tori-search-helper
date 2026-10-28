@@ -1,4 +1,4 @@
-import { validatePreset } from './presetSchema.js';
+import { validatePreset, isSafeUrl } from './presetSchema.js';
 
 // Auto-load all presets from the ./presets directory.
 // This includes both public examples (git tracked) and private data (gitignored).
@@ -50,6 +50,20 @@ export function deleteLocalPreset(id) {
     localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(presets));
     return presets;
 }
+
+// Fallback used when a preset's searchBaseUrl is missing or unsafe.
+export const DEFAULT_SEARCH_BASE_URL = 'https://tori.fi?q=';
+
+/**
+ * Returns a search base URL that is safe to use in navigation sinks. Unsafe
+ * or missing schemes fall back to a default https URL so that stored presets
+ * cannot redirect the browser to javascript: or other dangerous URLs.
+ * @param {string} searchBaseUrl
+ * @param {string} [fallback]
+ * @returns {string}
+ */
+export const getSafeSearchBaseUrl = (searchBaseUrl, fallback = DEFAULT_SEARCH_BASE_URL) =>
+    isSafeUrl(searchBaseUrl) ? searchBaseUrl : fallback;
 
 /**
  * Returns all available (valid) presets (File + Local).

@@ -66,4 +66,31 @@ describe('validatePreset', () => {
         };
         expect(validatePreset(withExtras)).toEqual({ valid: true, errors: [] });
     });
+
+    it('rejects preset with an unsafe searchBaseUrl scheme', () => {
+        const unsafeSchemes = [
+            'javascript:alert(1)//',
+            'data:text/html,<script>alert(1)</script>',
+            'vbscript:msgbox(1)',
+        ];
+        for (const url of unsafeSchemes) {
+            const result = validatePreset({ ...validPreset, searchBaseUrl: url });
+            expect(result.valid).toBe(false);
+            expect(result.errors.some((e) => e.includes('searchBaseUrl'))).toBe(true);
+        }
+    });
+
+    it('rejects preset with an invalid searchBaseUrl', () => {
+        const result = validatePreset({ ...validPreset, searchBaseUrl: 'not-a-url' });
+        expect(result.valid).toBe(false);
+        expect(result.errors.some((e) => e.includes('searchBaseUrl'))).toBe(true);
+    });
+
+    it('accepts http and https searchBaseUrl schemes', () => {
+        for (const url of ['http://foo.com/q=', 'https://www.tori.fi/search?q=']) {
+            const result = validatePreset({ ...validPreset, searchBaseUrl: url });
+            expect(result.valid).toBe(true);
+            expect(result.errors).toEqual([]);
+        }
+    });
 });

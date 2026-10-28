@@ -59,4 +59,18 @@ describe('ItemCard', () => {
         render(<ItemCard item={mockItem} preset={mockPreset} onTrack={() => { }} />);
         expect(screen.getByText('Search It')).toBeInTheDocument();
     });
+
+    it('does not open a javascript: URL when searching by term', () => {
+        const openSpy = vi.spyOn(window, 'open').mockImplementation(() => { });
+        const maliciousPreset = { ...mockPreset, searchBaseUrl: 'javascript:alert(1)//' };
+        render(<ItemCard item={mockItem} preset={maliciousPreset} onTrack={() => { }} />);
+        fireEvent.click(screen.getByText('Search It'));
+
+        expect(openSpy).toHaveBeenCalledTimes(1);
+        const url = String(openSpy.mock.calls[0][0]);
+        expect(url).not.toMatch(/^javascript:/i);
+        expect(new URL(url).protocol).toBe('https:');
+
+        openSpy.mockRestore();
+    });
 });

@@ -4,7 +4,8 @@ import {
     getPresetById,
     saveLocalPreset,
     deleteLocalPreset,
-    getLocalPresets
+    getLocalPresets,
+    getSafeSearchBaseUrl,
 } from '../presetLoader';
 
 describe('presetLoader', () => {
@@ -68,5 +69,39 @@ describe('presetLoader', () => {
 
     it('returns undefined for unknown preset ID', () => {
         expect(getPresetById('nonexistent')).toBeUndefined();
+    });
+
+    it('excludes a local preset with an unsafe searchBaseUrl scheme', () => {
+        saveLocalPreset({ ...mockLocalPreset, searchBaseUrl: 'javascript:alert(1)//' });
+        const all = getAvailablePresets();
+        expect(all.some((p) => p.id === 'local-preset')).toBe(false);
+    });
+});
+
+describe('getSafeSearchBaseUrl', () => {
+    it('passes http and https URLs through unchanged', () => {
+        expect(getSafeSearchBaseUrl('https://www.tori.fi/search?q=')).toBe(
+            'https://www.tori.fi/search?q=',
+        );
+        expect(getSafeSearchBaseUrl('http://foo.com/q=')).toBe('http://foo.com/q=');
+    });
+
+    it('falls back to the default https URL for javascript: scheme', () => {
+        expect(getSafeSearchBaseUrl('javascript:alert(1)//')).toBe('https://tori.fi?q=');
+    });
+
+    it('falls back for data: and vbscript: schemes', () => {
+        expect(getSafeSearchBaseUrl('data:text/html,<script>alert(1)</script>')).toBe(
+            'https://tori.fi?q=',
+        );
+        expect(getSafeSearchBaseUrl('vbscript:msgbox(1)')).toBe('https://tori.fi?q=');
+    });
+
+    it('falls back for invalid or missing URLs', () => {
+        expect(getSafeSearchBaseUrl(undefined)).toBe('https://tori.fi?q=');
+        expect(getSafeSearchBaseUrl('not-a-url')).toBe('https://tori.fi?q=');
+        expect(getSafeSearchBaseUrl('', 'https://custom.fallback/q=')).toBe(
+            'https://custom.fallback/q=',
+        );
     });
 });
