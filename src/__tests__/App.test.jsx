@@ -1,5 +1,5 @@
 import React from 'react';
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import App from '../App';
 import * as presetLoader from '../data/presetLoader';
@@ -62,5 +62,49 @@ describe('App', () => {
         fireEvent.change(screen.getByRole('combobox'), { target: { value: 'p2' } });
 
         expect(screen.getByText('Preset 2')).toBeInTheDocument();
+    });
+});
+
+describe('security: candidate result links', () => {
+    afterEach(() => {
+        localStorage.removeItem('tori_scout_candidates');
+        localStorage.removeItem('tori_scout_active_preset');
+    });
+
+    it('does not render a javascript: URL in the Check Tori.fi link', () => {
+        // A local (user-created) preset can store an unsafe searchBaseUrl in localStorage.
+        // That value flows raw into the link href below, so it must be scheme-validated.
+        localStorage.setItem(
+            'tori_scout_candidates',
+            JSON.stringify([{
+                uniqueId: 'p1-item1 ',
+                id: 'item1',
+                presetId: 'p1',
+                presetName: 'Malicious',
+                name: 'Target',
+                searchTerms: [],
+                fields: {},
+            }])
+        );
+        localStorage.setItem('tori_scout_active_preset', 'p1');
+
+        const maliciousPreset = {
+            id: 'p1',
+            name: 'Malicious',
+            description: 'd',
+            searchBaseUrl: 'javascript:alert(1)//',
+            categories: ['All'],
+            items: [],
+        };
+        presetLoader.getAvailablePresets.mockReturnValue([maliciousPreset]);
+        presetLoader.getPresetById.mockReturnValue(maliciousPreset);
+
+        render(<App />);
+
+        const link = screen.getByRole('link', { name: /Check Tori\.fi/ });
+        const href = link.getAttribute('href');
+
+        expect(href).not.toMatch(/^javascript:/i);
+        expect(new URL(href).protocol).toBe('https:');
     });
 });

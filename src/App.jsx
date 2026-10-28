@@ -5,6 +5,24 @@ import ItemCard from './components/ItemCard';
 import PresetSwitcher from './components/PresetSwitcher';
 import PresetManager from './components/PresetManager'; // Import PresetManager
 
+// Only http(s) URLs are allowed as search base URLs. A local preset stored in
+// localStorage can carry an unsafe scheme (e.g. javascript:), which would
+// execute when a result link is clicked (XSS through the DOM).
+const SAFE_URL_PROTOCOLS = ['http:', 'https:'];
+
+const isSafeUrl = (url) => {
+  try {
+    return SAFE_URL_PROTOCOLS.includes(new URL(url).protocol);
+  } catch {
+    return false;
+  }
+};
+
+const buildSearchUrl = (searchBaseUrl, query) => {
+  const base = isSafeUrl(searchBaseUrl) ? searchBaseUrl : 'https://tori.fi?q=';
+  return `${base}${encodeURIComponent(query || '')}`;
+};
+
 export default function App() {
   const [candidates, setCandidates] = useState(() => {
     const saved = localStorage.getItem('tori_scout_candidates');
@@ -237,7 +255,7 @@ export default function App() {
 
                       <div className="mt-2 flex gap-2">
                         <a
-                          href={`${getPresetById(candidate.presetId)?.searchBaseUrl || 'https://tori.fi?q='}${encodeURIComponent(candidate.searchTerms?.[0]?.query || candidate.name)} `}
+                          href={buildSearchUrl(getPresetById(candidate.presetId)?.searchBaseUrl, candidate.searchTerms?.[0]?.query || candidate.name)}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="flex-1 bg-white hover:bg-gray-50 text-indigo-600 text-xs py-1.5 px-2 rounded border border-indigo-100 flex items-center justify-center transition-colors"
