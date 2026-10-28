@@ -1,26 +1,12 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Search, Save, Trash2, X, ExternalLink, SlidersHorizontal, Settings, AlertTriangle } from 'lucide-react';
-import { getAvailablePresets, getPresetById } from './data/presetLoader';
+import { getAvailablePresets, getPresetById, getSafeSearchBaseUrl } from './data/presetLoader';
 import ItemCard from './components/ItemCard';
 import PresetSwitcher from './components/PresetSwitcher';
 import PresetManager from './components/PresetManager'; // Import PresetManager
 
-// Only http(s) URLs are allowed as search base URLs. A local preset stored in
-// localStorage can carry an unsafe scheme (e.g. javascript:), which would
-// execute when a result link is clicked (XSS through the DOM).
-const SAFE_URL_PROTOCOLS = ['http:', 'https:'];
-
-const isSafeUrl = (url) => {
-  try {
-    return SAFE_URL_PROTOCOLS.includes(new URL(url).protocol);
-  } catch {
-    return false;
-  }
-};
-
 const buildSearchUrl = (searchBaseUrl, query) => {
-  const base = isSafeUrl(searchBaseUrl) ? searchBaseUrl : 'https://tori.fi?q=';
-  return `${base}${encodeURIComponent(query || '')}`;
+  return `${getSafeSearchBaseUrl(searchBaseUrl)}${encodeURIComponent(query || '')}`;
 };
 
 export default function App() {
@@ -110,7 +96,7 @@ export default function App() {
   const launchCustomSearch = (e) => {
     e.preventDefault();
     if (!customSearch.trim()) return;
-    const url = `${activePreset.searchBaseUrl}${encodeURIComponent(customSearch)} `;
+    const url = `${getSafeSearchBaseUrl(activePreset.searchBaseUrl)}${encodeURIComponent(customSearch)}`;
     window.open(url, '_blank');
   };
 

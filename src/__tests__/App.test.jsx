@@ -25,10 +25,14 @@ const mockPreset = {
     tips: { title: 'Tips', items: ['Tip'] },
 };
 
-vi.mock('../data/presetLoader', () => ({
-    getAvailablePresets: vi.fn(),
-    getPresetById: vi.fn(),
-}));
+vi.mock('../data/presetLoader', async (importOriginal) => {
+    const actual = await importOriginal();
+    return {
+        ...actual,
+        getAvailablePresets: vi.fn(),
+        getPresetById: vi.fn(),
+    };
+});
 
 describe('App', () => {
     it('renders the active preset title', () => {
@@ -62,6 +66,68 @@ describe('App', () => {
         fireEvent.change(screen.getByRole('combobox'), { target: { value: 'p2' } });
 
         expect(screen.getByText('Preset 2')).toBeInTheDocument();
+    });
+});
+
+describe('security: custom search', () => {
+    afterEach(() => {
+        localStorage.clear();
+        vi.restoreAllMocks();
+    });
+
+    it('does not open a javascript: URL from custom search when preset searchBaseUrl is unsafe', () => {
+        const openSpy = vi.spyOn(window, 'open').mockImplementation(() => { });
+
+        const maliciousPreset = {
+            id: 'p1',
+            name: 'Malicious',
+            description: 'd',
+            icon: 'Search',
+            searchBaseUrl: 'javascript:alert(1)//',
+            categories: ['All'],
+            items: [{ id: 'i1', name: 'Item', category: 'All', searchTerms: [], fields: {} }],
+        };
+        presetLoader.getAvailablePresets.mockReturnValue([maliciousPreset]);
+        presetLoader.getPresetById.mockReturnValue(maliciousPreset);
+
+        render(<App />);
+
+        const input = screen.getByPlaceholderText(/Search Malicious\.\.\./);
+        fireEvent.change(input, { target: { value: 'canonical' } });
+        fireEvent.click(screen.getByRole('button', { name: /^Search$/ }));
+
+        expect(openSpy).toHaveBeenCalledTimes(1);
+        const url = String(openSpy.mock.calls[0][0]);
+        expect(url).not.toMatch(/^javascript:/i);
+        expect(new URL(url).protocol).toBe('https:');
+        expect(url).toContain('q=canonical');
+    });
+
+    it('uses the preset searchBaseUrl for custom search when it is safe', () => {
+        const openSpy = vi.spyOn(window, 'open').mockImplementation(() => { });
+
+        const safePreset = {
+            id: 'p2',
+            name: 'Safe',
+            description: 'd',
+            icon: 'Search',
+            searchBaseUrl: 'https://www.tori.fi/recommerce/forsale/search?q=',
+            categories: ['All'],
+            items: [{ id: 'i1', name: 'Item', category: 'All', searchTerms: [], fields: {} }],
+        };
+        presetLoader.getAvailablePresets.mockReturnValue([safePreset]);
+        presetLoader.getPresetById.mockReturnValue(safePreset);
+
+        render(<App />);
+
+        const input = screen.getByPlaceholderText(/Search Safe\.\.\./);
+        fireEvent.change(input, { target: { value: 'query' } });
+        fireEvent.click(screen.getByRole('button', { name: /^Search$/ }));
+
+        expect(openSpy).toHaveBeenCalledTimes(1);
+        const url = String(openSpy.mock.calls[0][0]);
+        expect(new URL(url).protocol).toBe('https:');
+        expect(url).toBe('https://www.tori.fi/recommerce/forsale/search?q=query');
     });
 });
 
