@@ -1,11 +1,30 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Search, Save, Trash2, X, ExternalLink, SlidersHorizontal, Settings, AlertTriangle } from 'lucide-react';
-import { getAvailablePresets, getPresetById } from './data/presetLoader';
+import { getAvailablePresets, getPresetById, getSafeSearchBaseUrl, DEFAULT_SEARCH_BASE_URL } from './data/presetLoader';
 import ItemCard from './components/ItemCard';
 import PresetSwitcher from './components/PresetSwitcher';
 import PresetManager from './components/PresetManager'; // Import PresetManager
 
-import { buildSearchUrl } from './utils/searchUrl';
+// Build a navigation-safe search URL. The preset searchBaseUrl may come from
+// localStorage and carry an unsafe scheme (javascript:/data:/vbscript:), which
+// would execute when a link is opened (DOM XSS). Always validate the scheme and
+// percent-encode the query at the sink so CodeQL/taint analysis can see the
+// sanitization happening directly on the untrusted input.
+const buildSearchUrl = (searchBaseUrl, query) => {
+  const base = getSafeSearchBaseUrl(searchBaseUrl);
+  const url = `${base}${encodeURIComponent(query || '')}`;
+  try {
+    const parsed = new URL(url);
+    const protocol = parsed.protocol;
+    // parsed.href normalisoi URL:n (esim. lisää puuttuvan /-polun), joten se
+    // täsmää sen kanssa mitä caller vertaa window.open-kutsun argumenttiin.
+    return (protocol === 'http:' || protocol === 'https:')
+      ? parsed.href
+      : `${DEFAULT_SEARCH_BASE_URL}${encodeURIComponent(query || '')}`;
+  } catch {
+    return `${DEFAULT_SEARCH_BASE_URL}${encodeURIComponent(query || '')}`;
+  }
+};
 
 export default function App() {
   const [candidates, setCandidates] = useState(() => {
