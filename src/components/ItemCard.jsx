@@ -8,17 +8,25 @@ import {
     Save,
 } from 'lucide-react';
 import Badge from './Badge';
-import { buildSearchUrl } from '../utils/searchUrl';
+import { getSafeSearchBaseUrl } from '../data/presetLoader';
 
 export default function ItemCard({ item, preset, onTrack }) {
     const launchSearch = (term) => {
+        // Validate the preset searchBaseUrl scheme before opening: a locally
+        // stored preset can carry an unsafe scheme (e.g. javascript:) that would
+        // execute when the search link is opened (XSS through the DOM).
+        const base = getSafeSearchBaseUrl(preset.searchBaseUrl);
         const params = new URLSearchParams({
+            q: term,
             sort: 'PRICE_ASC',
         });
         // Append multi-value params
         ['1', '2'].forEach(v => params.append('trade_type', v));
         ['1', '2', '3', '4'].forEach(v => params.append('condition', v));
-        const url = buildSearchUrl(preset.searchBaseUrl, term, params);
+        const urlString = `${base}${encodeURIComponent(term || '')}&${params.toString().replace(/q=[^&]+&/, '')}`;
+        // Normalisoi URL (esim. lisää puuttuva /-polku) jotta se on sama muoto
+        // kuin new URL(urlString).href, jota kutsupaikat vertaavat.
+        const url = new URL(urlString).href;
         window.open(url, '_blank', 'noopener,noreferrer');
     };
 
