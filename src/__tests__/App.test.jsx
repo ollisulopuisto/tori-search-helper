@@ -137,6 +137,24 @@ describe('security: candidate result links', () => {
         localStorage.removeItem('tori_scout_active_preset');
     });
 
+    it('uses the safe builder for custom searches', () => {
+        const open = vi.spyOn(window, 'open').mockImplementation(() => null);
+        presetLoader.getAvailablePresets.mockReturnValue([{
+            ...mockPreset, searchBaseUrl: 'javascript:alert(1)//',
+        }]);
+        render(<App />);
+        fireEvent.change(screen.getByPlaceholderText('Search Test Preset...'), {
+            target: { value: 'a&sort=EVIL + ä' },
+        });
+        fireEvent.click(screen.getByRole('button', { name: /^Search$/ }));
+        const url = new URL(open.mock.calls[0][0]);
+        expect(url.origin).toBe('https://tori.fi');
+        expect(url.searchParams.get('q')).toBe('a&sort=EVIL + ä');
+        expect(url.searchParams.has('sort')).toBe(false);
+        expect(open).toHaveBeenCalledWith(url.href, '_blank', 'noopener,noreferrer');
+        open.mockRestore();
+    });
+
     it('does not render a javascript: URL in the Check Tori.fi link', () => {
         // A local (user-created) preset can store an unsafe searchBaseUrl in localStorage.
         // That value flows raw into the link href below, so it must be scheme-validated.

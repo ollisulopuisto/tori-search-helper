@@ -8,19 +8,18 @@ import {
     Save,
 } from 'lucide-react';
 import Badge from './Badge';
-import { getSafeSearchBaseUrl } from '../data/presetLoader';
+import { buildSearchUrl } from '../utils/searchUrl';
 
 export default function ItemCard({ item, preset, onTrack }) {
     const launchSearch = (term) => {
         const params = new URLSearchParams({
-            q: term,
             sort: 'PRICE_ASC',
         });
         // Append multi-value params
         ['1', '2'].forEach(v => params.append('trade_type', v));
         ['1', '2', '3', '4'].forEach(v => params.append('condition', v));
-        const url = `${getSafeSearchBaseUrl(preset.searchBaseUrl)}${term}&${params.toString().replace(/q=[^&]+&/, '')}`;
-        window.open(url, '_blank');
+        const url = buildSearchUrl(preset.searchBaseUrl, term, params);
+        window.open(url, '_blank', 'noopener,noreferrer');
     };
 
     const categoryColor = preset.categoryColors?.[item.category] || 'blue';

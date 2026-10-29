@@ -55,6 +55,27 @@ describe('ItemCard', () => {
         expect(onTrack).toHaveBeenCalledWith(mockItem);
     });
 
+    it.each(['https://www.tori.fi/recommerce/forsale/search?q=', 'javascript:alert(1)//'])(
+        'safely opens item searches from %s with all filters', (searchBaseUrl) => {
+            const open = vi.spyOn(window, 'open').mockImplementation(() => null);
+            const item = {
+                ...mockItem,
+                searchTerms: [{ label: 'Special search', query: 'a&sort=EVIL + ä' }],
+            };
+            render(<ItemCard item={item} preset={{ ...mockPreset, searchBaseUrl }} onTrack={() => { }} />);
+            fireEvent.click(screen.getByText('Special search'));
+            const url = new URL(open.mock.calls[0][0]);
+            expect(url.protocol).toBe('https:');
+            expect(url.hostname).toMatch(/^(www\.)?tori\.fi$/);
+            expect(url.searchParams.get('q')).toBe('a&sort=EVIL + ä');
+            expect(url.searchParams.getAll('sort')).toEqual(['PRICE_ASC']);
+            expect(url.searchParams.getAll('trade_type')).toEqual(['1', '2']);
+            expect(url.searchParams.getAll('condition')).toEqual(['1', '2', '3', '4']);
+            expect(open).toHaveBeenCalledWith(url.href, '_blank', 'noopener,noreferrer');
+            open.mockRestore();
+        }
+    );
+
     it('renders search term buttons', () => {
         render(<ItemCard item={mockItem} preset={mockPreset} onTrack={() => { }} />);
         expect(screen.getByText('Search It')).toBeInTheDocument();

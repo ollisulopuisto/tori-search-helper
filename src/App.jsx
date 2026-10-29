@@ -1,23 +1,11 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Search, Save, Trash2, X, ExternalLink, SlidersHorizontal, Settings, AlertTriangle } from 'lucide-react';
-import { getAvailablePresets, getPresetById, getSafeSearchBaseUrl, DEFAULT_SEARCH_BASE_URL } from './data/presetLoader';
+import { getAvailablePresets, getPresetById } from './data/presetLoader';
 import ItemCard from './components/ItemCard';
 import PresetSwitcher from './components/PresetSwitcher';
 import PresetManager from './components/PresetManager'; // Import PresetManager
 
-const buildSearchUrl = (searchBaseUrl, query) => {
-  const base = getSafeSearchBaseUrl(searchBaseUrl);
-  const url = `${base}${encodeURIComponent(query || '')}`;
-  // Guarantee the navigable URL uses an http(s) scheme. A stored preset may carry
-  // an unsafe scheme (javascript:/data:/vbscript:) that would execute when the
-  // Check Tori.fi link is clicked (DOM XSS). Never render anything else.
-  try {
-    const protocol = new URL(url).protocol;
-    return (protocol === 'http:' || protocol === 'https:') ? url : `${DEFAULT_SEARCH_BASE_URL}${encodeURIComponent(query || '')}`;
-  } catch {
-    return `${DEFAULT_SEARCH_BASE_URL}${encodeURIComponent(query || '')}`;
-  }
-};
+import { buildSearchUrl } from './utils/searchUrl';
 
 export default function App() {
   const [candidates, setCandidates] = useState(() => {
@@ -106,8 +94,8 @@ export default function App() {
   const launchCustomSearch = (e) => {
     e.preventDefault();
     if (!customSearch.trim()) return;
-    const url = `${getSafeSearchBaseUrl(activePreset.searchBaseUrl)}${encodeURIComponent(customSearch)}`;
-    window.open(url, '_blank');
+    const url = buildSearchUrl(activePreset.searchBaseUrl, customSearch);
+    window.open(url, '_blank', 'noopener,noreferrer');
   };
 
   return (
