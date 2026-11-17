@@ -58,6 +58,23 @@ export function validatePreset(preset) {
                     errors.push(`Item ${i}: missing required field: ${field}`);
                 }
             }
+
+            // Security: searchTerms are rendered as text and their `query` is
+            // used to build navigation URLs. A malformed entry (e.g. from a
+            // tampered local preset stored in localStorage) would crash the UI
+            // (`.map` / `.query` on a non-object), so the shape is validated at
+            // the gate before untrusted presets reach the renderer.
+            if (!Array.isArray(item.searchTerms)) {
+                errors.push(`Item ${i}: searchTerms must be an array`);
+            } else {
+                item.searchTerms.forEach((term, tIdx) => {
+                    if (term === null || typeof term !== 'object' || Array.isArray(term)) {
+                        errors.push(`Item ${i}: searchTerms[${tIdx}] must be an object`);
+                    } else if (typeof term.label !== 'string' || typeof term.query !== 'string') {
+                        errors.push(`Item ${i}: searchTerms[${tIdx}] label and query must be strings`);
+                    }
+                });
+            }
         });
     }
 

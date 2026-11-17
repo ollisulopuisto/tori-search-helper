@@ -93,4 +93,41 @@ describe('validatePreset', () => {
             expect(result.errors).toEqual([]);
         }
     });
+
+    // Security: searchTerms are rendered and used to build navigation URLs, so
+    // a malformed entry (e.g. from a tampered local preset in localStorage)
+    // must be rejected at the validation gate instead of crashing the UI.
+    it('rejects items with a non-array searchTerms', () => {
+        const result = validatePreset({
+            ...validPreset,
+            items: [{ ...validPreset.items[0], searchTerms: 'not an array' }],
+        });
+        expect(result.valid).toBe(false);
+        expect(result.errors.some((e) => e.includes('searchTerms'))).toBe(true);
+    });
+
+    it('rejects items where a search term is not an object', () => {
+        const result = validatePreset({
+            ...validPreset,
+            items: [{ ...validPreset.items[0], searchTerms: [42, null] }],
+        });
+        expect(result.valid).toBe(false);
+        expect(result.errors.some((e) => e.includes('searchTerms'))).toBe(true);
+    });
+
+    it('rejects items where a search term is missing label or query', () => {
+        const result = validatePreset({
+            ...validPreset,
+            items: [{ ...validPreset.items[0], searchTerms: [{ label: 'Only label' }] }],
+        });
+        expect(result.valid).toBe(false);
+        expect(result.errors.some((e) => e.includes('searchTerms'))).toBe(true);
+    });
+    it.each([null, {}, [], 42])('rejects non-string labels without exposing them to React: %j', label => {
+        expect(validatePreset({...validPreset,items:[{...validPreset.items[0],searchTerms:[{label,query:'safe'}]}]}).valid).toBe(false);
+    });
+    it.each([null, {}, [], 42])('rejects non-string queries before URL construction: %j', query => {
+        expect(validatePreset({...validPreset,items:[{...validPreset.items[0],searchTerms:[{label:'safe',query}]}]}).valid).toBe(false);
+    });
+
 });
