@@ -123,4 +123,11 @@ describe('validatePreset', () => {
         expect(result.valid).toBe(false);
         expect(result.errors.some((e) => e.includes('searchTerms'))).toBe(true);
     });
+    it.each([null, {}, [], 42])('rejects non-string labels without exposing them to React: %j', label => {
+        expect(validatePreset({...validPreset,items:[{...validPreset.items[0],searchTerms:[{label,query:'safe'}]}]}).valid).toBe(false);
+    });
+    it.each([null, {}, [], 42])('rejects non-string queries before URL construction: %j', query => {
+        expect(validatePreset({...validPreset,items:[{...validPreset.items[0],searchTerms:[{label:'safe',query}]}]}).valid).toBe(false);
+    });
+
 });

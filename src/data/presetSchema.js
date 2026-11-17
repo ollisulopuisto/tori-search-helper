@@ -70,8 +70,8 @@ export function validatePreset(preset) {
                 item.searchTerms.forEach((term, tIdx) => {
                     if (term === null || typeof term !== 'object' || Array.isArray(term)) {
                         errors.push(`Item ${i}: searchTerms[${tIdx}] must be an object`);
-                    } else if (term.label === undefined || term.query === undefined) {
-                        errors.push(`Item ${i}: searchTerms[${tIdx}] missing label or query`);
+                    } else if (typeof term.label !== 'string' || typeof term.query !== 'string') {
+                        errors.push(`Item ${i}: searchTerms[${tIdx}] label and query must be strings`);
                     }
                 });
             }
