@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Search, Save, Trash2, X, ExternalLink, SlidersHorizontal, Settings, AlertTriangle } from 'lucide-react';
-import { getAvailablePresets, getPresetById, getSafeSearchBaseUrl, DEFAULT_SEARCH_BASE_URL } from './data/presetLoader';
+import { getAvailablePresets, getSafeSearchBaseUrl, DEFAULT_SEARCH_BASE_URL } from './data/presetLoader';
 import ItemCard from './components/ItemCard';
 import PresetSwitcher from './components/PresetSwitcher';
 import PresetManager from './components/PresetManager'; // Import PresetManager
@@ -49,6 +49,18 @@ export default function App() {
 
   // Load the active preset object
   const activePreset = availablePresets.find(p => p.id === effectiveActivePresetId) || availablePresets[0];
+
+  // Preset id -> searchBaseUrl lookup, rebuilt only when the preset list changes.
+  // Rendering candidate links previously called getPresetById() ->
+  // getAvailablePresets() (which reloads + validates every preset) once per
+  // candidate. A Map lookup makes each link O(1) instead.
+  const presetBaseUrls = useMemo(() => {
+    const map = new Map();
+    for (const preset of availablePresets) {
+      map.set(preset.id, preset.searchBaseUrl);
+    }
+    return map;
+  }, [availablePresets]);
 
   // Refresh presets (passed to Manager)
   const refreshPresets = () => {
@@ -258,7 +270,7 @@ export default function App() {
 
                       <div className="mt-2 flex gap-2">
                         <a
-                          href={buildSearchUrl(getPresetById(candidate.presetId)?.searchBaseUrl, candidate.searchTerms?.[0]?.query || candidate.name)}
+                          href={buildSearchUrl(presetBaseUrls.get(candidate.presetId), candidate.searchTerms?.[0]?.query || candidate.name)}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="flex-1 bg-white hover:bg-gray-50 text-indigo-600 text-xs py-1.5 px-2 rounded border border-indigo-100 flex items-center justify-center transition-colors"
