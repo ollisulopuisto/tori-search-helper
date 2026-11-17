@@ -192,3 +192,19 @@ describe('security: candidate result links', () => {
         expect(new URL(href).protocol).toBe('https:');
     });
 });
+
+describe('candidate preset lookup', () => {
+    it('keeps first-match precedence when loaded presets repeat an id', () => {
+        localStorage.setItem('tori_scout_candidates', JSON.stringify([{
+            uniqueId: 'test-preset-item1', id: 'item1', presetId: 'test-preset',
+            presetName: 'Test Preset', name: 'Tracked', searchTerms: [], fields: {},
+        }]));
+        presetLoader.getAvailablePresets.mockReturnValue([
+            {...mockPreset, searchBaseUrl: 'https://first.example/?q='},
+            {...mockPreset, searchBaseUrl: 'https://second.example/?q='},
+        ]);
+        render(<App />);
+        expect(screen.getByRole('link', {name: /Check Tori.fi/}).href).toContain('https://first.example/');
+        localStorage.removeItem('tori_scout_candidates');
+    });
+});

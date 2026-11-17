@@ -57,7 +57,7 @@ export default function App() {
   const presetBaseUrls = useMemo(() => {
     const map = new Map();
     for (const preset of availablePresets) {
-      map.set(preset.id, preset.searchBaseUrl);
+      if (!map.has(preset.id)) map.set(preset.id, preset.searchBaseUrl);
     }
     return map;
   }, [availablePresets]);
